@@ -1,0 +1,68 @@
+# =============================================================================
+# docker-compose.yml — local deployment for the Arithmetic Calculator
+# =============================================================================
+# Defines two services:
+#   server  — the arithmetic server (Process B), built from the Dockerfile
+#   client  — the interactive client (Process A), built from the same image
+#              but overrides the command to run client.py instead
+#
+# Usage:
+#   Start the server in the background:
+#     docker compose up -d server
+#
+#   Run the client interactively (attach stdin/tty so the prompts work):
+#     docker compose run --rm client
+#
+#   Stop and remove containers:
+#     docker compose down
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # server — Process B
+  # Builds the image from the project root (uses the Dockerfile there).
+  # ---------------------------------------------------------------------------
+  server:
+    build:
+      context: .          # Build context is the project root
+      dockerfile: Dockerfile
+    container_name: arithmetic-server
+
+    # Map host port 9999 → container port 9999 so you can also connect with
+    # a local Python client (python client/client.py) if you change HOST to localhost.
+    ports:
+      - "9999:9999"
+
+    # Restart the server automatically if it crashes
+    restart: unless-stopped
+
+    # Optional: tag the image so it can be pushed to Docker Hub
+    image: arithmetic-server:latest
+
+  # ---------------------------------------------------------------------------
+  # client — Process A
+  # Reuses the same built image but runs client.py instead of server.py.
+  # ---------------------------------------------------------------------------
+  client:
+    # Re-use the image already built for the server — no separate Dockerfile needed.
+    image: arithmetic-server:latest
+
+    # The client depends on the server being up before it starts.
+    depends_on:
+      - server
+
+    # Override the default CMD from the Dockerfile.
+    # The client code uses "server" as the hostname, which Docker Compose
+    # resolves automatically via its internal DNS.
+    command: ["python", "client.py"]
+
+    # stdin_open + tty are required so the interactive prompts (input()) work
+    # correctly when running `docker compose run client`.
+    stdin_open: true
+    tty: true
+
+    # Copy the client source into the container at runtime.
+    # This avoids building a separate image just for the client.
+    volumes:
+      - ./client:/app
